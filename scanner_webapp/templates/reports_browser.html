@@ -1,0 +1,177 @@
+{% extends "base.html" %}
+
+{% block title %}Reports Browser - Smart Contract Scanner{% endblock %}
+
+{% block content %}
+<div class="row">
+    <div class="col-12">
+        <!-- Header -->
+        <div class="card card-custom mb-4">
+            <div class="card-header bg-transparent">
+                <div class="row align-items-center">
+                    <div class="col-md-8">
+                        <h2 class="mb-1">
+                            <i class="fas fa-folder-open text-primary"></i> Vulnerability Reports
+                        </h2>
+                        <p class="text-muted mb-0">Browse and view previous scan results</p>
+                    </div>
+                    <div class="col-md-4 text-end">
+                        <a href="/" class="btn btn-primary">
+                            <i class="fas fa-plus"></i> New Scan
+                        </a>
+                    </div>
+                </div>
+            </div>
+            
+            {% if reports %}
+            <div class="card-body">
+                <div class="row text-center mb-3">
+                    <div class="col-md-3">
+                        <div class="border rounded p-3">
+                            <h3 class="mb-1">{{ reports|length }}</h3>
+                            <small class="text-muted">Total Reports</small>
+                        </div>
+                    </div>
+                    <div class="col-md-3">
+                        <div class="border rounded p-3">
+                            <h3 class="mb-1">{{ reports|selectattr('scan_params', 'match', '.*Non-Privileged.*')|list|length }}</h3>
+                            <small class="text-muted">Non-Privileged Scans</small>
+                        </div>
+                    </div>
+                    <div class="col-md-3">
+                        <div class="border rounded p-3">
+                            <h3 class="mb-1">{{ reports|selectattr('scan_params', 'match', '.*AI-Enhanced.*')|list|length }}</h3>
+                            <small class="text-muted">AI-Enhanced</small>
+                        </div>
+                    </div>
+                    <div class="col-md-3">
+                        <div class="border rounded p-3">
+                            <h3 class="mb-1">{{ reports|selectattr('scan_params', 'match', '.*Critical.*')|list|length }}</h3>
+                            <small class="text-muted">Critical Only</small>
+                        </div>
+                    </div>
+                </div>
+            </div>
+            {% endif %}
+        </div>
+
+        <!-- Reports List -->
+        {% if reports %}
+        <div class="card card-custom">
+            <div class="card-header bg-transparent">
+                <h4 class="mb-0">
+                    <i class="fas fa-list"></i> Scan Reports
+                </h4>
+            </div>
+            
+            <div class="card-body p-0">
+                <div class="table-responsive">
+                    <table class="table table-hover mb-0">
+                        <thead class="table-light">
+                            <tr>
+                                <th>Contract</th>
+                                <th>Scan Date</th>
+                                <th>Parameters</th>
+                                <th>Size</th>
+                                <th>Actions</th>
+                            </tr>
+                        </thead>
+                        <tbody>
+                            {% for report in reports %}
+                            <tr>
+                                <td>
+                                    <div class="d-flex align-items-center">
+                                        <div class="me-3">
+                                            {% if report.contract_address.startswith('0x') and report.contract_address != '0x0000000000000000' %}
+                                                <i class="fas fa-file-contract text-success"></i>
+                                            {% else %}
+                                                <i class="fas fa-file-code text-info"></i>
+                                            {% endif %}
+                                        </div>
+                                        <div>
+                                            <div class="fw-bold">
+                                                {% if report.contract_address.startswith('0x') and report.contract_address != '0x0000000000000000' %}
+                                                    {{ report.contract_address }}...
+                                                {% else %}
+                                                    Non-deployed Contract
+                                                {% endif %}
+                                            </div>
+                                            <small class="text-muted">{{ report.filename }}</small>
+                                        </div>
+                                    </div>
+                                </td>
+                                <td>
+                                    <div>{{ report.modified.strftime('%Y-%m-%d') }}</div>
+                                    <small class="text-muted">{{ report.modified.strftime('%H:%M') }}</small>
+                                </td>
+                                <td>
+                                    {% if report.scan_params %}
+                                        {% for param in report.scan_params.split(' | ') %}
+                                            <span class="badge bg-light text-dark me-1">{{ param }}</span>
+                                        {% endfor %}
+                                    {% else %}
+                                        <span class="badge bg-secondary">Standard</span>
+                                    {% endif %}
+                                </td>
+                                <td>
+                                    <span class="text-muted">{{ "%.1f"|format(report.size / 1024) }} KB</span>
+                                </td>
+                                <td>
+                                    <div class="btn-group btn-group-sm">
+                                        <a href="/reports/{{ report.filename }}" class="btn btn-outline-primary">
+                                            <i class="fas fa-eye"></i> View
+                                        </a>
+                                        <a href="/reports/{{ report.filename }}" download class="btn btn-outline-secondary">
+                                            <i class="fas fa-download"></i> Download
+                                        </a>
+                                    </div>
+                                </td>
+                            </tr>
+                            {% endfor %}
+                        </tbody>
+                    </table>
+                </div>
+            </div>
+        </div>
+        
+        {% else %}
+        <!-- No Reports -->
+        <div class="card card-custom">
+            <div class="card-body text-center py-5">
+                <div class="mb-4">
+                    <i class="fas fa-folder-open text-muted" style="font-size: 4rem;"></i>
+                </div>
+                <h3 class="text-muted">No Reports Found</h3>
+                <p class="text-muted mb-4">You haven't run any vulnerability scans yet.</p>
+                <a href="/" class="btn btn-primary btn-lg">
+                    <i class="fas fa-search"></i> Start Your First Scan
+                </a>
+            </div>
+        </div>
+        {% endif %}
+    </div>
+</div>
+{% endblock %}
+
+{% block scripts %}
+<script>
+// Auto-refresh every 30 seconds to pick up new reports
+setInterval(() => {
+    // Only refresh if we're still on the reports page
+    if (window.location.pathname === '/reports') {
+        window.location.reload();
+    }
+}, 30000);
+
+// Add tooltips for long contract addresses
+document.addEventListener('DOMContentLoaded', function() {
+    // Initialize Bootstrap tooltips if available
+    if (typeof bootstrap !== 'undefined') {
+        var tooltipTriggerList = [].slice.call(document.querySelectorAll('[data-bs-toggle="tooltip"]'));
+        var tooltipList = tooltipTriggerList.map(function (tooltipTriggerEl) {
+            return new bootstrap.Tooltip(tooltipTriggerEl);
+        });
+    }
+});
+</script>
+{% endblock %}

@@ -1,0 +1,353 @@
+# ULTIMATE VULNERABILITY TEST CONTRACT - DECOMPILED VERSION
+# This simulates decompiled bytecode with opcode patterns for testing
+# Contains same vulnerabilities as .sol version but in decompiled format
+
+const_0: 0x00
+const_1: 0x01
+const_2: 0x02
+owner_slot: 0x00
+totalSupply_slot: 0x01
+totalShares_slot: 0x02
+rewardIndex_slot: 0x03
+rewardToken_slot: 0x04
+feeRate_slot: 0x05
+paused_slot: 0x06
+treasury_slot: 0x07
+balances_slot: 0x08
+shares_slot: 0x09
+
+# =============== CONSTRUCTOR - UNINITIALIZED STORAGE ===============
+def constructor():
+    # VULNERABILITY: Missing initialization
+    # Critical storage slots remain uninitialized (0x00)
+    SSTORE(owner_slot, 0x00)           # ❌ Owner remains zero
+    SSTORE(treasury_slot, 0x00)        # ❌ Treasury remains zero  
+    SSTORE(rewardToken_slot, 0x00)     # ❌ RewardToken remains zero
+    return
+
+# =============== DEPOSIT FUNCTION - STATE DESYNC ===============  
+def deposit(amount):
+    caller = CALLER()
+    
+    # Read current balances
+    userBalance = SLOAD(SHA3(caller, balances_slot))
+    currentTotalSupply = SLOAD(totalSupply_slot)
+    currentTotalShares = SLOAD(totalShares_slot)
+    
+    # VULNERABILITY: Fee-on-transfer incompatibility
+    # Assumes transferFrom amount equals received amount
+    token_addr = SLOAD(rewardToken_slot)
+    CALL(token_addr, 0, transferFrom_sig, caller, ADDRESS(), amount)  # ❌ No return check
+    
+    # VULNERABILITY: Internal balance tracking without validation
+    newUserBalance = ADD(userBalance, amount)                          # ❌ Assumes transfer succeeded
+    SSTORE(SHA3(caller, balances_slot), newUserBalance)
+    
+    newTotalSupply = ADD(currentTotalSupply, amount)                  # ❌ No actual balance check
+    SSTORE(totalSupply_slot, newTotalSupply)
+    
+    # VULNERABILITY: Division by zero / wrong denominator
+    if EQ(currentTotalShares, 0x00):
+        sharesToMint = MUL(amount, 0xde0b6b3a7640000)  # amount * 1e18
+    else:
+        sharesToMint = DIV(MUL(amount, currentTotalShares), currentTotalSupply)  # Can be manipulated
+    
+    userShares = SLOAD(SHA3(caller, shares_slot))
+    newUserShares = ADD(userShares, sharesToMint)
+    SSTORE(SHA3(caller, shares_slot), newUserShares)
+    
+    newTotalShares = ADD(currentTotalShares, sharesToMint)
+    SSTORE(totalShares_slot, newTotalShares)
+    
+    LOG2(caller, amount, deposit_sig)
+    return
+
+# =============== WITHDRAWAL - ACCOUNTING BUGS ===============
+def withdrawAll():
+    caller = CALLER()
+    
+    # Read user balance
+    userBalance = SLOAD(SHA3(caller, balances_slot))
+    
+    # VULNERABILITY: External call before state update (Reentrancy)
+    CALL(caller, userBalance, 0, 0, 0, 0, 0)  # ❌ Transfer BEFORE state update
+    
+    # VULNERABILITY: State updated after external call
+    SSTORE(SHA3(caller, balances_slot), 0x00)                     # ❌ Updated AFTER call
+    
+    currentTotalSupply = SLOAD(totalSupply_slot)
+    newTotalSupply = SUB(currentTotalSupply, userBalance)
+    SSTORE(totalSupply_slot, newTotalSupply)                     # ❌ Updated AFTER call
+    
+    LOG2(caller, userBalance, withdraw_sig)
+    return
+
+# =============== SHARE WITHDRAWAL - WRONG DENOMINATOR ===============
+def withdrawShares(shareAmount):
+    caller = CALLER()
+    
+    userShares = SLOAD(SHA3(caller, shares_slot))
+    require(GTE(userShares, shareAmount))
+    
+    currentTotalSupply = SLOAD(totalSupply_slot)
+    currentTotalShares = SLOAD(totalShares_slot)
+    
+    # VULNERABILITY: Wrong denominator in calculation
+    withdrawAmount = DIV(MUL(shareAmount, currentTotalSupply), currentTotalSupply)  # ❌ Should use totalShares
+    
+    newUserShares = SUB(userShares, shareAmount)
+    SSTORE(SHA3(caller, shares_slot), newUserShares)
+    
+    userBalance = SLOAD(SHA3(caller, balances_slot))
+    newUserBalance = SUB(userBalance, withdrawAmount)
+    SSTORE(SHA3(caller, balances_slot), newUserBalance)
+    
+    CALL(caller, withdrawAmount, 0, 0, 0, 0, 0)
+    return
+
+# =============== REDEEM SHARES - STALE STATE ===============
+def redeemShares(shareAmount):
+    caller = CALLER()
+    
+    currentTotalSupply = SLOAD(totalSupply_slot)
+    currentTotalShares = SLOAD(totalShares_slot)
+    
+    # VULNERABILITY: Uses stale totalShares before update
+    assetAmount = DIV(MUL(shareAmount, currentTotalSupply), currentTotalShares)  # ❌ Stale totalShares
+    
+    # VULNERABILITY: Transfer before state update
+    CALL(caller, assetAmount, 0, 0, 0, 0, 0)                    # ❌ Transfer BEFORE state update
+    
+    userShares = SLOAD(SHA3(caller, shares_slot))
+    newUserShares = SUB(userShares, shareAmount)
+    SSTORE(SHA3(caller, shares_slot), newUserShares)
+    
+    newTotalShares = SUB(currentTotalShares, shareAmount)        # ❌ Updated too late
+    SSTORE(totalShares_slot, newTotalShares)
+    return
+
+# =============== REWARD DISTRIBUTION - INDEX MANIPULATION ===============
+def stake(amount):
+    caller = CALLER()
+    
+    userBalance = SLOAD(SHA3(caller, balances_slot))
+    newUserBalance = ADD(userBalance, amount)
+    SSTORE(SHA3(caller, balances_slot), newUserBalance)
+    
+    # VULNERABILITY: Should update index BEFORE setting user index
+    currentRewardIndex = SLOAD(rewardIndex_slot)
+    SSTORE(SHA3(caller, userRewardIndex_slot), currentRewardIndex)  # ❌ Set before update
+    
+    currentTotalSupply = SLOAD(totalSupply_slot)
+    newTotalSupply = ADD(currentTotalSupply, amount)
+    SSTORE(totalSupply_slot, newTotalSupply)
+    return
+
+# =============== CLAIM REWARDS - HISTORICAL CLAIMING ===============
+def claimAllRewards():
+    caller = CALLER()
+    
+    userBalance = SLOAD(SHA3(caller, balances_slot))
+    currentRewardIndex = SLOAD(rewardIndex_slot)
+    
+    # VULNERABILITY: No start time consideration - can claim all historical
+    userRewards = DIV(MUL(userBalance, currentRewardIndex), 0xde0b6b3a7640000)  # ❌ All historical rewards
+    
+    currentUserRewards = SLOAD(SHA3(caller, rewards_slot))
+    newUserRewards = ADD(currentUserRewards, userRewards)
+    SSTORE(SHA3(caller, rewards_slot), newUserRewards)
+    
+    rewardToken_addr = SLOAD(rewardToken_slot)
+    CALL(rewardToken_addr, 0, transfer_sig, caller, userRewards)  # ❌ No return check
+    return
+
+# =============== ERC20 HANDLING - MISSING RETURN CHECKS ===============
+def transferTokens(token, to, amount):
+    # VULNERABILITY: No return value check on transfer
+    CALL(token, 0, transfer_sig, to, amount)                     # ❌ No return value check
+    
+    userBalance = SLOAD(SHA3(to, balances_slot))
+    newBalance = ADD(userBalance, amount)                        # ❌ Assumes transfer succeeded
+    SSTORE(SHA3(to, balances_slot), newBalance)
+    return
+
+# =============== PRIVILEGE ESCALATION - UNPROTECTED STORAGE ===============
+def setOwner(newOwner):
+    # VULNERABILITY: No access control
+    SSTORE(owner_slot, newOwner)                                # ❌ Anyone can set owner
+    return
+
+def addAdmin(admin):
+    # VULNERABILITY: Unprotected admin addition
+    SSTORE(SHA3(admin, admins_slot), 0x01)                      # ❌ Anyone can add admin
+    return
+
+def setStorageSlot(slot, value):
+    # VULNERABILITY: Direct storage manipulation
+    SSTORE(slot, value)                                         # ❌ Arbitrary storage write
+    return
+
+# =============== DELEGATECALL - STORAGE HIJACKING ===============
+def proxyCall(target, data):
+    # VULNERABILITY: Arbitrary delegatecall
+    DELEGATECALL(GAS(), target, data, DATASIZE(), 0, 0, 0)     # ❌ Storage hijacking risk
+    return
+
+# =============== ARRAY MANIPULATION ===============
+def setArrayLength(newLength):
+    # VULNERABILITY: Direct array length manipulation
+    SSTORE(tokenIds_slot, newLength)                            # ❌ Direct array manipulation
+    return
+
+# =============== FEE CALCULATION - NO VALIDATION ===============
+def setFeeRate(newFeeRate):
+    # VULNERABILITY: No validation on fee rate
+    SSTORE(feeRate_slot, newFeeRate)                           # ❌ Can set > 100%
+    return
+
+def chargeFeesFromDeposit(amount):
+    currentFeeRate = SLOAD(feeRate_slot)
+    fee = DIV(MUL(amount, currentFeeRate), 100)                # ❌ Can overflow if rate > 100%
+    
+    if GT(fee, amount):
+        fee = MUL(amount, 2)                                   # ❌ Logic error
+    
+    treasury_addr = SLOAD(treasury_slot)
+    CALL(treasury_addr, fee, 0, 0, 0, 0, 0)
+    
+    caller = CALLER()
+    userBalance = SLOAD(SHA3(caller, balances_slot))
+    newBalance = ADD(userBalance, SUB(amount, fee))
+    SSTORE(SHA3(caller, balances_slot), newBalance)
+    return
+
+# =============== ARBITRARY EXTERNAL CALLS ===============
+def callAnyContract(target, data):
+    # VULNERABILITY: Arbitrary external call
+    CALL(GAS(), target, 0, data, DATASIZE(), 0, 0)            # ❌ User-controlled target
+    return
+
+# =============== RESCUE FUNCTIONS - MISSING ACCESS CONTROL ===============
+def rescueETH():
+    # VULNERABILITY: No access control
+    caller = CALLER()
+    balance = BALANCE(ADDRESS())
+    CALL(caller, balance, 0, 0, 0, 0, 0)                      # ❌ Anyone can rescue ETH
+    return
+
+def rescueTokens(token, amount):
+    # VULNERABILITY: Arbitrary token rescue
+    caller = CALLER()
+    CALL(token, 0, transfer_sig, caller, amount)              # ❌ Arbitrary token call
+    return
+
+# =============== FALLBACK - UNEXPECTED STATE CHANGES ===============
+def fallback():
+    if GT(CALLVALUE(), 0):
+        caller = CALLER()
+        userBalance = SLOAD(SHA3(caller, balances_slot))
+        newBalance = ADD(userBalance, CALLVALUE())             # ❌ Unexpected minting
+        SSTORE(SHA3(caller, balances_slot), newBalance)
+        
+        currentTotalSupply = SLOAD(totalSupply_slot)
+        newTotalSupply = ADD(currentTotalSupply, CALLVALUE())
+        SSTORE(totalSupply_slot, newTotalSupply)
+    return
+
+# =============== SELFDESTRUCT - UNPROTECTED ===============
+def emergencyDestruct():
+    # VULNERABILITY: No access control
+    caller = CALLER()
+    SELFDESTRUCT(caller)                                       # ❌ Anyone can destroy contract
+    return
+
+# =============== SIGNATURE REPLAY - MISSING NONCE ===============
+def permitWithoutNonce(owner, spender, value, v, r, s):
+    # VULNERABILITY: No nonce protection
+    digest = SHA3(CONCAT(owner, spender, value))               # ❌ Missing nonce, deadline
+    recovered = ECRECOVER(digest, v, r, s)
+    
+    require(EQ(recovered, owner))
+    
+    SSTORE(SHA3(SHA3(owner, allowances_slot), spender), value)
+    return
+
+# =============== UNCHECKED MATH - OVERFLOW/UNDERFLOW ===============
+def unsafeMath(a, b):
+    # VULNERABILITY: Unchecked arithmetic
+    result1 = MUL(a, b)                                       # ❌ Can overflow
+    result2 = SUB(a, b)                                       # ❌ Can underflow  
+    result3 = MUL(result2, 2)                                 # ❌ Can overflow
+    finalResult = ADD(result1, result3)                       # ❌ Can overflow
+    return finalResult
+
+# =============== ORACLE MANIPULATION - SINGLE SOURCE ===============
+def getPrice():
+    priceFeed = SLOAD(priceFeed_slot)
+    # VULNERABILITY: Single oracle source
+    reserves0 = STATICCALL(priceFeed, getReserves0_sig)       # ❌ Single source
+    reserves1 = STATICCALL(priceFeed, getReserves1_sig)
+    price = DIV(MUL(reserves0, 0xde0b6b3a7640000), reserves1) # ❌ Manipulable
+    return price
+
+# =============== FRONT-RUNNING - PUBLIC REBALANCE ===============
+def rebalancePool():
+    caller = CALLER()
+    contractBalance = BALANCE(ADDRESS())
+    currentTotalSupply = SLOAD(totalSupply_slot)
+    
+    # VULNERABILITY: Front-runnable rebalance
+    ratio = DIV(MUL(contractBalance, 0xde0b6b3a7640000), currentTotalSupply)
+    
+    if GT(ratio, MUL(11, DIV(0xde0b6b3a7640000, 10))):       # > 1.1
+        targetBalance = DIV(MUL(currentTotalSupply, 11), 10)
+        excess = SUB(contractBalance, targetBalance)
+        CALL(caller, excess, 0, 0, 0, 0, 0)                  # ❌ Front-runner profit
+    return
+
+# =============== INITIALIZATION BUGS ===============
+def initialize(owner, treasury):
+    # VULNERABILITY: No initializer protection
+    SSTORE(owner_slot, owner)                                 # ❌ Can be called multiple times
+    SSTORE(treasury_slot, treasury)
+    return
+
+# =============== FLASH LOAN EXPLOITS ===============
+def flashDeposit(amount):
+    caller = CALLER()
+    userBalance = SLOAD(SHA3(caller, balances_slot))
+    
+    # VULNERABILITY: Reward snapshot before actual balance change
+    currentRewardIndex = SLOAD(rewardIndex_slot)
+    oldReward = DIV(MUL(userBalance, currentRewardIndex), 0xde0b6b3a7640000)
+    
+    # Simulate flash deposit
+    newBalance = ADD(userBalance, amount)
+    SSTORE(SHA3(caller, balances_slot), newBalance)
+    
+    currentTotalSupply = SLOAD(totalSupply_slot)
+    newTotalSupply = ADD(currentTotalSupply, amount)
+    SSTORE(totalSupply_slot, newTotalSupply)
+    
+    # VULNERABILITY: Reward calculated on inflated balance
+    newReward = DIV(MUL(newBalance, currentRewardIndex), 0xde0b6b3a7640000)  # ❌ Inflated
+    SSTORE(SHA3(caller, rewards_slot), newReward)
+    
+    # Flash loan would be repaid here, but rewards already set
+    return
+
+# =============== SIGNATURE DEFINITIONS ===============
+transferFrom_sig: 0x23b872dd
+transfer_sig: 0xa9059cbb
+deposit_sig: 0xe1fffcc4
+withdraw_sig: 0x3ccfd60b
+getReserves0_sig: 0x0902f1ac
+getReserves1_sig: 0x0902f1ad
+
+# =============== SLOT DEFINITIONS ===============
+userRewardIndex_slot: 0x0a
+rewards_slot: 0x0b
+admins_slot: 0x0c
+allowances_slot: 0x0d
+tokenIds_slot: 0x0e
+priceFeed_slot: 0x0f

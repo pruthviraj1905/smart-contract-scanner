@@ -1,0 +1,125 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <title>Simple Scanner Test</title>
+    <style>
+        body { font-family: Arial, sans-serif; margin: 40px; background: #0a0a0a; color: #00ff00; }
+        .form-group { margin: 20px 0; }
+        label { display: block; margin-bottom: 5px; font-weight: bold; }
+        input, select, textarea { width: 100%; padding: 10px; margin-bottom: 10px; background: #1a1a1a; color: #00ff00; border: 1px solid #00ff00; }
+        button { background: #ff0040; color: white; padding: 15px 30px; border: none; font-weight: bold; cursor: pointer; }
+        button:hover { background: #ff0066; }
+    </style>
+</head>
+<body>
+    <h1>🔥 Simple Scanner Test</h1>
+    <p>Direct form submission test for the Base contract</p>
+    
+    <form action="/scan" method="POST">
+        <div class="form-group">
+            <label>Contract Address:</label>
+            <input type="text" name="contract_address" value="0x0619a9d474fdbc343b0c84488bec3a15733f4e38" required>
+        </div>
+        
+        <div class="form-group">
+            <label>Chain:</label>
+            <select name="chain" required>
+                <option value="base" selected>Base</option>
+                <option value="ethereum">Ethereum</option>
+                <option value="bsc">BSC</option>
+            </select>
+        </div>
+        
+        <div class="form-group">
+            <label>Source Type:</label>
+            <select name="source_type" required>
+                <option value="decompiled" selected>Decompiled</option>
+                <option value="solidity">Solidity</option>
+                <option value="bytecode">Bytecode</option>
+            </select>
+        </div>
+        
+        <div class="form-group">
+            <label>Decompiled Code:</label>
+            <textarea name="decompiled_text" rows="20" required>// Decompiled by library.dedaub.com
+// 2025.10.14 21:55 UTC
+// Compiled using the solidity compiler version 0.8.26
+
+// Data structures and variables inferred from the use of storage instructions
+address ___function_selector__; // STORAGE[0x360894a13ba1a3210667c828492db98dca3e2076cc3735a920a3ca505d382bbc] bytes 0 to 19
+
+// Events
+Upgraded(address);
+
+function __function_selector__(bytes4 function_selector, address varg1, uint256 varg2) public payable { 
+    if (address(0xd33b78c01482587b4e43d6a85cbc79243c6f140e) - msg.sender) {
+        CALLDATACOPY(0, 0, msg.data.length);
+        v0 = ___function_selector__.delegatecall(MEM[0:msg.data.length], MEM[0:0]).gas(msg.gas);
+        require(v0, 0, RETURNDATASIZE()); // checks call status, propagates error data on error
+        return MEM[0:RETURNDATASIZE()];
+    } else {
+        require(0x4f1ef28600000000000000000000000000000000000000000000000000000000 == function_selector, ProxyDeniedAdminAccess());
+        require(4 <= msg.data.length);
+        require(msg.data.length - 4 >= 64);
+        require(varg2 <= uint64.max);
+        require(varg2 + 35 < msg.data.length);
+        require(varg2.length <= uint64.max, Panic(65)); // failed memory allocation (too much memory)
+        v1 = new bytes[](varg2.length);
+        require(!((v1 + (0xffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffe0 & 63 + (0xffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffe0 & 31 + varg2.length)) < v1) | (v1 + (0xffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffe0 & 63 + (0xffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffe0 & 31 + varg2.length)) > uint64.max)), Panic(65)); // failed memory allocation (too much memory)
+        require(varg2 + varg2.length + 36 <= msg.data.length);
+        CALLDATACOPY(v1.data, varg2.data, varg2.length);
+        v1[varg2.length] = 0;
+        require(varg1.code.size, ERC1967InvalidImplementation(varg1));
+        ___function_selector__ = varg1;
+        emit Upgraded(varg1);
+        if (!v1.length) {
+            require(!msg.value, ERC1967NonPayable());
+        } else {
+            v2, /* uint256 */ v3 = varg1.delegatecall(MEM[vcfV0xe80V0x5f.data:vcfV0xe80V0x5f.data + vcfV0xe80V0x5f.length], MEM[0:0]).gas(msg.gas);
+            if (!RETURNDATASIZE()) {
+                v4 = v5 = 96;
+            } else {
+                require(RETURNDATASIZE() <= uint64.max, Panic(65)); // failed memory allocation (too much memory)
+                v4 = new bytes[](RETURNDATASIZE());
+                require(!((v4 + (0xffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffe0 & 63 + (0xffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffe0 & 31 + RETURNDATASIZE())) < v4) | (v4 + (0xffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffe0 & 63 + (0xffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffe0 & 31 + RETURNDATASIZE())) > uint64.max)), Panic(65)); // failed memory allocation (too much memory)
+                v3 = v4.data;
+                RETURNDATACOPY(v3, 0, RETURNDATASIZE());
+            }
+            if (v2) {
+                v6 = v7 = !MEM[v4];
+                if (v7) {
+                    v6 = v8 = !varg1.code.size;
+                }
+                require(!v6, AddressEmptyCode(varg1));
+            } else {
+                require(!MEM[v4], 32 + v4, MEM[v4]);
+                revert(FailedInnerCall());
+            }
+        }
+        exit;
+    }
+}</textarea>
+        </div>
+        
+        <div class="form-group">
+            <input type="checkbox" name="undeployed_contract" id="undeployed">
+            <label for="undeployed">Undeployed Contract (Skip blockchain validation)</label>
+        </div>
+        
+        <div class="form-group">
+            <input type="checkbox" name="enable_ai" id="ai">
+            <label for="ai">Enable AI Validation</label>
+        </div>
+        
+        <div class="form-group">
+            <button type="submit">🚀 START SCAN</button>
+        </div>
+    </form>
+    
+    <h3>📊 Test Instructions:</h3>
+    <p>1. Click "START SCAN" to test the backend directly</p>
+    <p>2. You'll be redirected to the results page</p>
+    <p>3. This bypasses the JavaScript "Failed to fetch" issue</p>
+    <p>4. Proves the backend API is working correctly</p>
+</body>
+</html>

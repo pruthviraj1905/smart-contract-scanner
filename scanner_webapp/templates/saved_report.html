@@ -1,0 +1,221 @@
+{% extends "base.html" %}
+
+{% block title %}Report: {{ filename }} - Smart Contract Scanner{% endblock %}
+
+{% block content %}
+<div class="row">
+    <div class="col-12">
+        <!-- Report Header -->
+        <div class="card card-custom mb-4">
+            <div class="card-header bg-transparent">
+                <div class="row align-items-center">
+                    <div class="col-md-8">
+                        <h2 class="mb-1">
+                            <i class="fas fa-file-alt text-primary"></i> Vulnerability Report
+                        </h2>
+                        <p class="text-muted mb-0">{{ report_data.contract }}</p>
+                        <small class="text-muted">{{ report_data.scan_date }} | {{ report_data.scan_params }}</small>
+                    </div>
+                    <div class="col-md-4 text-end">
+                        <div class="btn-group">
+                            <a href="/reports" class="btn btn-outline-secondary">
+                                <i class="fas fa-arrow-left"></i> Back to Reports
+                            </a>
+                            <a href="/reports/{{ filename }}" download class="btn btn-outline-primary">
+                                <i class="fas fa-download"></i> Download
+                            </a>
+                        </div>
+                    </div>
+                </div>
+            </div>
+            
+            <div class="card-body">
+                <!-- Summary Stats -->
+                <div class="row text-center">
+                    <div class="col-md-12">
+                        <div class="border rounded p-3">
+                            <h3 class="mb-1">{{ report_data.total_vulnerabilities }}</h3>
+                            <small class="text-muted">Total Vulnerabilities Found</small>
+                        </div>
+                    </div>
+                </div>
+                
+                {% if report_data.total_vulnerabilities == 0 %}
+                <div class="alert alert-success mt-4 text-center">
+                    <h4><i class="fas fa-shield-check"></i> No Vulnerabilities Found</h4>
+                    <p class="mb-0">No exploitable vulnerabilities were detected based on the scan criteria.</p>
+                </div>
+                {% endif %}
+            </div>
+        </div>
+
+        <!-- Vulnerabilities List -->
+        {% if report_data.vulnerabilities %}
+        <div class="card card-custom">
+            <div class="card-header bg-transparent">
+                <h3 class="mb-0">
+                    <i class="fas fa-exclamation-triangle text-warning"></i> Vulnerability Details
+                </h3>
+                <p class="text-muted mb-0">{{ report_data.vulnerabilities|length }} vulnerabilities detected</p>
+            </div>
+            
+            <div class="card-body">
+                {% for vuln in report_data.vulnerabilities %}
+                <div class="card mb-4 border-start border-5 
+                    {% if 'CRITICAL' in vuln.severity %}border-danger
+                    {% elif 'HIGH' in vuln.severity %}border-warning
+                    {% elif 'MEDIUM' in vuln.severity %}border-info
+                    {% else %}border-secondary{% endif %}">
+                    
+                    <div class="card-header">
+                        <div class="row align-items-center">
+                            <div class="col-md-8">
+                                <h5 class="mb-1">
+                                    {% if 'CRITICAL' in vuln.severity %}🔴
+                                    {% elif 'HIGH' in vuln.severity %}🟠
+                                    {% elif 'MEDIUM' in vuln.severity %}🟡
+                                    {% else %}🔵{% endif %}
+                                    {{ vuln.title }}
+                                </h5>
+                                <small class="text-muted">{{ vuln.location }}</small>
+                            </div>
+                            <div class="col-md-4 text-end">
+                                <span class="badge 
+                                    {% if 'CRITICAL' in vuln.severity %}bg-danger
+                                    {% elif 'HIGH' in vuln.severity %}bg-warning
+                                    {% elif 'MEDIUM' in vuln.severity %}bg-info
+                                    {% else %}bg-secondary{% endif %}">
+                                    {{ vuln.severity }}
+                                </span>
+                                <span class="badge bg-light text-dark ms-2">
+                                    {{ vuln.confidence }}
+                                </span>
+                            </div>
+                        </div>
+                    </div>
+                    
+                    <div class="card-body">
+                        <div class="row">
+                            <div class="col-md-6">
+                                <h6><i class="fas fa-info-circle"></i> Description</h6>
+                                <p class="text-muted">{{ vuln.description or 'Description not available' }}</p>
+                                
+                                <h6><i class="fas fa-exclamation"></i> Impact</h6>
+                                <p class="text-muted">{{ vuln.impact or 'Impact assessment not available' }}</p>
+                            </div>
+                            <div class="col-md-6">
+                                <h6><i class="fas fa-route"></i> Exploit Information</h6>
+                                <p class="text-muted">{{ vuln.exploit_path or 'Exploit details not available' }}</p>
+                                
+                                <h6><i class="fas fa-tools"></i> Recommendation</h6>
+                                <p class="text-muted">{{ vuln.recommendation or 'Recommendations not available' }}</p>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+                {% endfor %}
+            </div>
+        </div>
+        {% endif %}
+
+        <!-- Report Metadata -->
+        <div class="card card-custom mt-4">
+            <div class="card-header bg-transparent">
+                <h4 class="mb-0">
+                    <i class="fas fa-info"></i> Report Information
+                </h4>
+            </div>
+            <div class="card-body">
+                <div class="row">
+                    <div class="col-md-6">
+                        <table class="table table-sm">
+                            <tr>
+                                <td><strong>Contract:</strong></td>
+                                <td><code>{{ report_data.contract }}</code></td>
+                            </tr>
+                            <tr>
+                                <td><strong>Scan Date:</strong></td>
+                                <td>{{ report_data.scan_date }}</td>
+                            </tr>
+                            <tr>
+                                <td><strong>Filename:</strong></td>
+                                <td><code>{{ filename }}</code></td>
+                            </tr>
+                        </table>
+                    </div>
+                    <div class="col-md-6">
+                        <table class="table table-sm">
+                            <tr>
+                                <td><strong>Scan Parameters:</strong></td>
+                                <td>{{ report_data.scan_params }}</td>
+                            </tr>
+                            <tr>
+                                <td><strong>Scanner Version:</strong></td>
+                                <td>Deep Scanner v1.0</td>
+                            </tr>
+                            <tr>
+                                <td><strong>Focus:</strong></td>
+                                <td>Non-Privileged Fund Drain</td>
+                            </tr>
+                        </table>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <!-- Navigation -->
+        <div class="text-center mt-4">
+            <a href="/reports" class="btn btn-secondary">
+                <i class="fas fa-arrow-left"></i> Back to Reports
+            </a>
+            <a href="/" class="btn btn-primary">
+                <i class="fas fa-search"></i> New Scan
+            </a>
+            <a href="/reports/{{ filename }}" download class="btn btn-success">
+                <i class="fas fa-download"></i> Download Report
+            </a>
+        </div>
+    </div>
+</div>
+{% endblock %}
+
+{% block scripts %}
+<script>
+// Add copy-to-clipboard functionality for contract addresses
+document.addEventListener('DOMContentLoaded', function() {
+    // Add click-to-copy for code elements
+    document.querySelectorAll('code').forEach(function(codeElement) {
+        codeElement.style.cursor = 'pointer';
+        codeElement.title = 'Click to copy';
+        
+        codeElement.addEventListener('click', function() {
+            navigator.clipboard.writeText(this.textContent).then(function() {
+                // Show tooltip or flash message
+                const originalText = codeElement.textContent;
+                codeElement.style.background = '#28a745';
+                codeElement.style.color = 'white';
+                setTimeout(() => {
+                    codeElement.style.background = '';
+                    codeElement.style.color = '';
+                }, 1000);
+            });
+        });
+    });
+    
+    // Syntax highlighting for any code blocks
+    document.querySelectorAll('pre code').forEach(function(block) {
+        // Simple Solidity highlighting
+        let html = block.innerHTML;
+        
+        // Highlight Solidity keywords
+        html = html.replace(/\b(function|contract|public|private|external|internal|pure|view|payable|modifier|require|revert|assert|mapping|address|uint256|bool|string)\b/g, 
+            '<span style="color: #ff6b6b; font-weight: bold;">$1</span>');
+        
+        // Highlight comments
+        html = html.replace(/(\/\/.*)/g, '<span style="color: #6c757d; font-style: italic;">$1</span>');
+        
+        block.innerHTML = html;
+    });
+});
+</script>
+{% endblock %}

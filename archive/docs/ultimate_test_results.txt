@@ -1,0 +1,16 @@
+ULTIMATE SCANNER TEST RESULTS
+==================================================
+
+SOLIDITY ANALYSIS:
+Total: 60
+Categories:
+  ERC20 Handling: 19
+  State Desync: 35
+  Withdrawal Accounting: 6
+
+DECOMPILED ANALYSIS:
+Total: 28
+Categories:
+  State Desync: 12
+  Withdrawal Accounting: 5
+  ERC20 Handling: 11

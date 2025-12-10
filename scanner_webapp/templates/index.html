@@ -1,0 +1,949 @@
+{% extends "base.html" %}
+
+{% block extra_head %}
+<!-- SocketIO for real-time communication -->
+<script src="https://cdnjs.cloudflare.com/ajax/libs/socket.io/4.0.1/socket.io.js"></script>
+<!-- Hacker Font -->
+<link href="https://fonts.googleapis.com/css2?family=Fira+Code:wght@300;400;500;600;700&family=Space+Mono:ital,wght@0,400;0,700;1,400&display=swap" rel="stylesheet">
+<style>
+/* ========== HACKER THEME STYLES ========== */
+:root {
+    --hacker-green: #00ff41;
+    --hacker-green-dim: #00cc33;
+    --hacker-green-dark: #009926;
+    --hacker-red: #ff0040;
+    --hacker-orange: #ff6600;
+    --hacker-yellow: #ffcc00;
+    --hacker-blue: #0080ff;
+    --hacker-bg: #0a0a0a;
+    --hacker-bg-light: #1a1a1a;
+    --hacker-bg-lighter: #2a2a2a;
+    --matrix-font: 'Fira Code', 'Space Mono', 'Courier New', monospace;
+}
+
+/* Body and main styling */
+body {
+    background: linear-gradient(135deg, #0a0a0a 0%, #1a1a1a 100%);
+    color: var(--hacker-green);
+    font-family: var(--matrix-font);
+    min-height: 100vh;
+    position: relative;
+}
+
+/* Matrix rain effect background */
+body::before {
+    content: '';
+    position: fixed;
+    top: 0;
+    left: 0;
+    width: 100%;
+    height: 100%;
+    background: url("data:image/svg+xml,%3Csvg width='20' height='20' viewBox='0 0 20 20' xmlns='http://www.w3.org/2000/svg'%3E%3Cg fill='%2300ff41' fill-opacity='0.05'%3E%3Cpath d='M10 0v20M0 10h20'/%3E%3C/g%3E%3C/svg%3E");
+    z-index: -1;
+    animation: matrix-rain 20s linear infinite;
+}
+
+@keyframes matrix-rain {
+    0% { background-position: 0 0; }
+    100% { background-position: 0 400px; }
+}
+
+/* Container styling */
+.container {
+    position: relative;
+    z-index: 1;
+}
+
+/* Card styling */
+.card {
+    background: rgba(26, 26, 26, 0.95) !important;
+    border: 2px solid var(--hacker-green) !important;
+    border-radius: 10px !important;
+    box-shadow: 0 0 20px rgba(0, 255, 65, 0.3) !important;
+    backdrop-filter: blur(10px);
+}
+
+.card-header {
+    background: linear-gradient(135deg, var(--hacker-green-dark), var(--hacker-green)) !important;
+    border-bottom: 2px solid var(--hacker-green) !important;
+    color: #000 !important;
+    font-weight: bold;
+    text-align: center;
+    position: relative;
+    overflow: hidden;
+}
+
+.card-header::before {
+    content: '';
+    position: absolute;
+    top: 0;
+    left: -100%;
+    width: 100%;
+    height: 100%;
+    background: linear-gradient(90deg, transparent, rgba(255,255,255,0.2), transparent);
+    animation: scan-line 3s infinite;
+}
+
+@keyframes scan-line {
+    0% { left: -100%; }
+    100% { left: 100%; }
+}
+
+.card-body {
+    background: var(--hacker-bg-light) !important;
+    color: var(--hacker-green);
+}
+
+/* Form styling */
+.form-control {
+    background-color: var(--hacker-bg) !important;
+    border: 1px solid var(--hacker-green-dim) !important;
+    color: var(--hacker-green) !important;
+    font-family: var(--matrix-font);
+    transition: all 0.3s ease;
+}
+
+.form-control:focus {
+    background-color: var(--hacker-bg-light) !important;
+    border-color: var(--hacker-green) !important;
+    box-shadow: 0 0 10px rgba(0, 255, 65, 0.5) !important;
+    color: var(--hacker-green) !important;
+}
+
+.form-label {
+    color: var(--hacker-green);
+    font-weight: 600;
+    text-transform: uppercase;
+    letter-spacing: 1px;
+}
+
+/* Button styling */
+.btn-scan {
+    background: linear-gradient(135deg, var(--hacker-red), #ff0066) !important;
+    border: 2px solid var(--hacker-red) !important;
+    color: #fff !important;
+    font-family: var(--matrix-font);
+    font-weight: bold;
+    text-transform: uppercase;
+    letter-spacing: 2px;
+    padding: 12px 30px;
+    transition: all 0.3s ease;
+    position: relative;
+    overflow: hidden;
+}
+
+.btn-scan:hover {
+    background: linear-gradient(135deg, #ff0066, var(--hacker-red)) !important;
+    box-shadow: 0 0 20px rgba(255, 0, 64, 0.6);
+    transform: translateY(-2px);
+}
+
+.btn-scan:active {
+    transform: translateY(0);
+}
+
+/* Terminal-style output area */
+#terminal-output {
+    background: linear-gradient(135deg, #000, #0a0a0a);
+    color: var(--hacker-green);
+    font-family: var(--matrix-font);
+    font-size: 13px;
+    padding: 20px;
+    border-radius: 10px;
+    height: 500px;
+    overflow-y: auto;
+    border: 2px solid var(--hacker-green);
+    margin-top: 20px;
+    display: none;
+    white-space: pre-wrap;
+    word-break: break-all;
+    box-shadow: 0 0 30px rgba(0, 255, 65, 0.3);
+    position: relative;
+}
+
+#terminal-output.active {
+    display: block;
+}
+
+/* Terminal header */
+#terminal-output::before {
+    content: '◉ ◉ ◉ VULNERABILITY_SCANNER_CLI > root@hackbox:~$ ';
+    display: block;
+    background: var(--hacker-green);
+    color: #000;
+    padding: 10px;
+    margin: -20px -20px 15px -20px;
+    font-weight: bold;
+    font-size: 12px;
+    letter-spacing: 1px;
+}
+
+.terminal-line {
+    margin: 3px 0;
+    line-height: 1.5;
+    animation: terminal-flicker 0.1s ease-in-out;
+}
+
+@keyframes terminal-flicker {
+    0% { opacity: 0.8; }
+    100% { opacity: 1; }
+}
+
+.terminal-timestamp {
+    color: var(--hacker-yellow);
+    font-weight: bold;
+    text-shadow: 0 0 5px rgba(255, 204, 0, 0.5);
+}
+
+.terminal-content {
+    color: var(--hacker-green);
+    text-shadow: 0 0 5px rgba(0, 255, 65, 0.3);
+}
+
+.terminal-error {
+    color: var(--hacker-red) !important;
+    text-shadow: 0 0 5px rgba(255, 0, 64, 0.5) !important;
+    animation: error-blink 1s ease-in-out;
+}
+
+.terminal-warning {
+    color: var(--hacker-orange) !important;
+    text-shadow: 0 0 5px rgba(255, 102, 0, 0.5) !important;
+}
+
+.terminal-success {
+    color: var(--hacker-green) !important;
+    text-shadow: 0 0 5px rgba(0, 255, 65, 0.5) !important;
+    font-weight: bold;
+}
+
+.terminal-info {
+    color: var(--hacker-blue) !important;
+    text-shadow: 0 0 5px rgba(0, 128, 255, 0.5) !important;
+}
+
+@keyframes error-blink {
+    0%, 100% { opacity: 1; }
+    50% { opacity: 0.7; }
+}
+
+/* Terminal toggle button - hacker style */
+.terminal-toggle {
+    background: linear-gradient(135deg, var(--hacker-bg), var(--hacker-bg-light));
+    color: var(--hacker-green);
+    border: 2px solid var(--hacker-green);
+    padding: 10px 20px;
+    border-radius: 25px;
+    cursor: pointer;
+    font-family: var(--matrix-font);
+    font-weight: bold;
+    text-transform: uppercase;
+    letter-spacing: 2px;
+    margin-left: 15px;
+    transition: all 0.3s ease;
+    box-shadow: 0 0 10px rgba(0, 255, 65, 0.3);
+}
+
+.terminal-toggle:hover {
+    background: linear-gradient(135deg, var(--hacker-green-dark), var(--hacker-green));
+    color: #000;
+    box-shadow: 0 0 20px rgba(0, 255, 65, 0.6);
+    transform: translateY(-2px);
+}
+
+.terminal-toggle.active {
+    background: linear-gradient(135deg, var(--hacker-green), var(--hacker-green-dim));
+    color: #000;
+    box-shadow: 0 0 25px rgba(0, 255, 65, 0.8);
+}
+
+/* Scan status indicator - matrix style */
+.scan-status {
+    display: inline-block;
+    padding: 8px 15px;
+    border-radius: 20px;
+    font-size: 12px;
+    font-weight: bold;
+    text-transform: uppercase;
+    margin-left: 15px;
+    font-family: var(--matrix-font);
+    letter-spacing: 1px;
+    border: 2px solid transparent;
+    box-shadow: 0 0 15px rgba(0, 0, 0, 0.5);
+}
+
+.scan-status.running {
+    background: linear-gradient(135deg, var(--hacker-orange), var(--hacker-red));
+    color: #fff;
+    border-color: var(--hacker-orange);
+    animation: scan-pulse 1.5s infinite;
+}
+
+.scan-status.completed {
+    background: linear-gradient(135deg, var(--hacker-green), var(--hacker-green-dim));
+    color: #000;
+    border-color: var(--hacker-green);
+    box-shadow: 0 0 20px rgba(0, 255, 65, 0.5);
+}
+
+.scan-status.error {
+    background: linear-gradient(135deg, var(--hacker-red), #ff0066);
+    color: #fff;
+    border-color: var(--hacker-red);
+    animation: error-flash 2s infinite;
+}
+
+@keyframes scan-pulse {
+    0%, 100% { 
+        opacity: 1; 
+        transform: scale(1);
+        box-shadow: 0 0 15px rgba(255, 102, 0, 0.5);
+    }
+    50% { 
+        opacity: 0.8; 
+        transform: scale(1.05);
+        box-shadow: 0 0 25px rgba(255, 102, 0, 0.8);
+    }
+}
+
+@keyframes error-flash {
+    0%, 100% { opacity: 1; }
+    50% { opacity: 0.6; }
+}
+
+/* Progress bars - matrix style */
+.progress {
+    background: var(--hacker-bg) !important;
+    border: 1px solid var(--hacker-green) !important;
+    border-radius: 10px !important;
+    height: 25px !important;
+    box-shadow: inset 0 0 10px rgba(0, 0, 0, 0.5);
+}
+
+.progress-bar {
+    background: linear-gradient(90deg, var(--hacker-green-dark), var(--hacker-green)) !important;
+    border-radius: 8px !important;
+    box-shadow: 0 0 15px rgba(0, 255, 65, 0.5);
+    animation: progress-glow 2s ease-in-out infinite alternate;
+}
+
+@keyframes progress-glow {
+    0% { box-shadow: 0 0 15px rgba(0, 255, 65, 0.5); }
+    100% { box-shadow: 0 0 25px rgba(0, 255, 65, 0.8); }
+}
+
+/* Additional hacker elements */
+.form-check-input:checked {
+    background-color: var(--hacker-green) !important;
+    border-color: var(--hacker-green) !important;
+}
+
+.form-select {
+    background-color: var(--hacker-bg) !important;
+    border: 1px solid var(--hacker-green-dim) !important;
+    color: var(--hacker-green) !important;
+    font-family: var(--matrix-font);
+}
+
+.form-select:focus {
+    border-color: var(--hacker-green) !important;
+    box-shadow: 0 0 10px rgba(0, 255, 65, 0.5) !important;
+}
+
+/* Glitch effect for title */
+.hacker-title {
+    font-family: var(--matrix-font);
+    font-weight: bold;
+    text-transform: uppercase;
+    letter-spacing: 3px;
+    color: var(--hacker-green);
+    text-shadow: 
+        0 0 5px rgba(0, 255, 65, 0.5),
+        0 0 10px rgba(0, 255, 65, 0.3),
+        0 0 20px rgba(0, 255, 65, 0.2);
+    animation: title-flicker 4s infinite;
+}
+
+@keyframes title-flicker {
+    0%, 100% { opacity: 1; }
+    2% { opacity: 0.9; }
+    4% { opacity: 1; }
+    6% { opacity: 0.8; }
+    8% { opacity: 1; }
+}
+</style>
+{% endblock %}
+
+{% block content %}
+<div class="row justify-content-center">
+    <div class="col-lg-10">
+        <!-- Scanner Form -->
+        <div class="card card-custom">
+            <div class="card-header">
+                <h2 class="text-center mb-0 hacker-title">
+                    <i class="fas fa-skull"></i> DEEP CONTRACT VULNERABILITY SCANNER
+                </h2>
+                <p class="text-center mb-0" style="color: #000; font-weight: bold; text-transform: uppercase; letter-spacing: 2px;">
+                    🔥 AI-Enhanced Non-Privileged Fund Drain Detection 🔥
+                </p>
+            </div>
+            
+            <div class="card-body p-4">
+                <form id="scanForm" enctype="multipart/form-data">
+                    <!-- Contract Address -->
+                    <div class="row mb-4">
+                        <div class="col-12">
+                            <label for="contract_address" class="form-label fw-bold">
+                                <i class="fas fa-link"></i> Contract Address
+                            </label>
+                            <input type="text" class="form-control" id="contract_address" name="contract_address" 
+                                   placeholder="0x1234567890123456789012345678901234567890" 
+                                   pattern="0x[a-fA-F0-9]{40}" required>
+                            <div class="form-text">Enter the contract address on the blockchain (42 characters starting with 0x)</div>
+                        </div>
+                    </div>
+
+                    <!-- Source Type Selection -->
+                    <div class="row mb-4">
+                        <div class="col-12">
+                            <label class="form-label fw-bold">
+                                <i class="fas fa-code"></i> Source Code Type
+                            </label>
+                            <ul class="nav nav-pills" role="tablist">
+                                <li class="nav-item" role="presentation">
+                                    <a class="nav-link active" data-bs-toggle="pill" href="#solidity-tab" role="tab">
+                                        <i class="fab fa-ethereum"></i> Verified Solidity
+                                    </a>
+                                </li>
+                                <li class="nav-item" role="presentation">
+                                    <a class="nav-link" data-bs-toggle="pill" href="#decompiled-tab" role="tab">
+                                        <i class="fas fa-cogs"></i> Decompiled Code
+                                    </a>
+                                </li>
+                                <li class="nav-item" role="presentation">
+                                    <a class="nav-link" data-bs-toggle="pill" href="#bytecode-tab" role="tab">
+                                        <i class="fas fa-binary"></i> Raw Bytecode
+                                    </a>
+                                </li>
+                            </ul>
+                        </div>
+                    </div>
+
+                    <!-- Source Code Input -->
+                    <div class="tab-content mb-4">
+                        <!-- Solidity Tab -->
+                        <div class="tab-pane fade show active" id="solidity-tab" role="tabpanel">
+                            <input type="hidden" name="source_type" value="solidity">
+                            
+                            <div class="row">
+                                <div class="col-md-6">
+                                    <label for="solidity_file" class="form-label">
+                                        <i class="fas fa-upload"></i> Upload .sol File
+                                    </label>
+                                    <input type="file" class="form-control" id="solidity_file" name="solidity_file" 
+                                           accept=".sol,.txt" onchange="clearTextArea('solidity_text')">
+                                </div>
+                                <div class="col-md-6">
+                                    <label class="form-label">OR</label>
+                                </div>
+                            </div>
+                            
+                            <div class="mt-3">
+                                <label for="solidity_text" class="form-label">
+                                    <i class="fas fa-edit"></i> Paste Solidity Code
+                                </label>
+                                <textarea class="form-control code-input" id="solidity_text" name="solidity_text" 
+                                          rows="10" placeholder="pragma solidity ^0.8.0;&#10;&#10;contract MyContract {&#10;    // Your contract code here&#10;}" 
+                                          onchange="clearFileInput('solidity_file')"></textarea>
+                            </div>
+                        </div>
+
+                        <!-- Decompiled Tab -->
+                        <div class="tab-pane fade" id="decompiled-tab" role="tabpanel">
+                            <div class="row">
+                                <div class="col-md-6">
+                                    <label for="decompiled_file" class="form-label">
+                                        <i class="fas fa-upload"></i> Upload Decompiled File
+                                    </label>
+                                    <input type="file" class="form-control" id="decompiled_file" name="decompiled_file" 
+                                           accept=".txt" onchange="clearTextArea('decompiled_text')">
+                                </div>
+                                <div class="col-md-6">
+                                    <label class="form-label">OR</label>
+                                </div>
+                            </div>
+                            
+                            <div class="mt-3">
+                                <label for="decompiled_text" class="form-label">
+                                    <i class="fas fa-edit"></i> Paste Decompiled Code
+                                </label>
+                                <textarea class="form-control code-input" id="decompiled_text" name="decompiled_text" 
+                                          rows="10" placeholder="// Decompiled by library.dedaub.com&#10;&#10;function transferToken(address account, uint256 amount) public nonPayable {&#10;    // Decompiled function code&#10;}" 
+                                          onchange="clearFileInput('decompiled_file')"></textarea>
+                            </div>
+                        </div>
+
+                        <!-- Bytecode Tab -->
+                        <div class="tab-pane fade" id="bytecode-tab" role="tabpanel">
+                            <div class="row">
+                                <div class="col-md-6">
+                                    <label for="bytecode_file" class="form-label">
+                                        <i class="fas fa-upload"></i> Upload Bytecode File
+                                    </label>
+                                    <input type="file" class="form-control" id="bytecode_file" name="bytecode_file" 
+                                           accept=".txt" onchange="clearTextArea('bytecode_text')">
+                                </div>
+                                <div class="col-md-6">
+                                    <label class="form-label">OR</label>
+                                </div>
+                            </div>
+                            
+                            <div class="mt-3">
+                                <label for="bytecode_text" class="form-label">
+                                    <i class="fas fa-edit"></i> Paste Bytecode
+                                </label>
+                                <textarea class="form-control code-input" id="bytecode_text" name="bytecode_text" 
+                                          rows="10" placeholder="608060405260043610610062576000357c0100000000000000000000000000000000000000000000000000000000900463ffffffff168063a9059cbb14610067..." 
+                                          onchange="clearFileInput('bytecode_file')"></textarea>
+                            </div>
+                        </div>
+                    </div>
+
+                    <!-- Scan Options -->
+                    <div class="row mb-4">
+                        <div class="col-12">
+                            <h5 class="mb-3">
+                                <i class="fas fa-cog"></i> Scan Options
+                            </h5>
+                        </div>
+                        
+                        <div class="col-md-3">
+                            <label for="min_severity" class="form-label">Minimum Severity</label>
+                            <select class="form-select" id="min_severity" name="min_severity">
+                                <option value="">All Severities</option>
+                                <option value="LOW">Low & Above</option>
+                                <option value="MEDIUM">Medium & Above</option>
+                                <option value="HIGH">High & Above</option>
+                                <option value="CRITICAL">Critical Only</option>
+                            </select>
+                        </div>
+                        
+                        <div class="col-md-3">
+                            <label for="min_confidence" class="form-label">Minimum Confidence</label>
+                            <select class="form-select" id="min_confidence" name="min_confidence">
+                                <option value="">Any Confidence</option>
+                                <option value="0.5">50% & Above</option>
+                                <option value="0.7">70% & Above</option>
+                                <option value="0.8">80% & Above</option>
+                                <option value="0.9">90% & Above</option>
+                            </select>
+                        </div>
+                        
+                        <div class="col-md-2">
+                            <label class="form-label">Focus</label>
+                            <div class="form-check mt-2">
+                                <input class="form-check-input" type="checkbox" id="non_privileged_only" name="non_privileged_only" checked>
+                                <label class="form-check-label" for="non_privileged_only">
+                                    <strong>Non-Privileged Only</strong>
+                                    <small class="d-block text-muted">External users can exploit</small>
+                                </label>
+                            </div>
+                        </div>
+                        
+                        <div class="col-md-2">
+                            <label class="form-label">Analysis Mode</label>
+                            <div class="form-check mt-2">
+                                <input class="form-check-input" type="checkbox" id="combine_sources" name="combine_sources">
+                                <label class="form-check-label" for="combine_sources">
+                                    <strong>Combined Analysis</strong>
+                                    <small class="d-block text-muted">Multi-source validation</small>
+                                </label>
+                            </div>
+                        </div>
+                        
+                        <div class="col-md-2">
+                            <label class="form-label">AI Validation</label>
+                            <div class="form-check mt-2">
+                                <input class="form-check-input" type="checkbox" id="enable_ai" name="enable_ai" checked>
+                                <label class="form-check-label" for="enable_ai">
+                                    <strong>🤖 AI-Powered</strong>
+                                    <small class="d-block text-muted">Eliminate false positives</small>
+                                </label>
+                            </div>
+                        </div>
+                        
+                        <div class="col-md-2">
+                            <label for="chain" class="form-label">Blockchain</label>
+                            <select class="form-select" id="chain" name="chain">
+                                <option value="ethereum">Ethereum</option>
+                                <option value="bsc" selected>BSC</option>
+                                <option value="polygon">Polygon</option>
+                                <option value="avalanche">Avalanche</option>
+                                <option value="arbitrum">Arbitrum</option>
+                                <option value="optimism">Optimism</option>
+                                <option value="base">Base</option>
+                                <option value="gnosis">Gnosis</option>
+                            </select>
+                        </div>
+                        
+                        <div class="col-md-3">
+                            <label for="api_key" class="form-label">API Key (Optional)</label>
+                            <input type="text" class="form-control" id="api_key" name="api_key" 
+                                   placeholder="For enhanced analysis">
+                            <small class="form-text text-muted">BSCScan, Etherscan, etc.</small>
+                        </div>
+                        
+                        <div class="col-md-2">
+                            <label class="form-label">Contract Status</label>
+                            <div class="form-check mt-2">
+                                <input class="form-check-input" type="checkbox" id="undeployed_contract" name="undeployed_contract">
+                                <label class="form-check-label" for="undeployed_contract">
+                                    <strong>📄 Undeployed</strong>
+                                    <small class="d-block text-muted">Skip blockchain validation</small>
+                                </label>
+                            </div>
+                        </div>
+                    </div>
+
+                    <!-- Submit Button -->
+                    <div class="row">
+                        <div class="col-12 text-center">
+                            <button type="submit" class="btn btn-scan btn-lg">
+                                <i class="fas fa-rocket"></i> Start Deep Scan
+                            </button>
+                            <button type="button" class="terminal-toggle" id="terminalToggle" onclick="toggleTerminal()">
+                                <i class="fas fa-terminal"></i> CLI Output
+                            </button>
+                            <span id="scanStatus" class="scan-status" style="display: none;">Ready</span>
+                        </div>
+                    </div>
+                </form>
+
+                <!-- Terminal Output Area -->
+                <div id="terminal-output" class="terminal-output">
+                    <div style="text-align: center; color: #888; margin-bottom: 10px;">
+                        🖥️ Real-time Scanner Output
+                    </div>
+                    <div id="terminal-content"></div>
+                </div>
+
+                <!-- Progress Section -->
+                <div id="progressContainer" class="progress-container">
+                    <h5 class="text-center mb-3">
+                        <i class="fas fa-spinner fa-spin"></i> <span id="progressText">Scanning...</span>
+                    </h5>
+                    <div class="progress mb-3">
+                        <div id="progressBar" class="progress-bar scan-progress" role="progressbar" 
+                             style="width: 0%"></div>
+                    </div>
+                    <div class="text-center">
+                        <small class="text-muted">Please wait while we analyze your contract for vulnerabilities...</small>
+                    </div>
+                </div>
+
+                <!-- Results Section -->
+                <div id="resultsContainer" style="display: none;">
+                    <div class="alert alert-success text-center">
+                        <h4><i class="fas fa-check-circle"></i> Scan Completed!</h4>
+                        <p class="mb-0">Click the button below to view your detailed vulnerability report.</p>
+                        <button id="viewReportBtn" class="btn btn-success mt-3">
+                            <i class="fas fa-file-alt"></i> View Detailed Report
+                        </button>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <!-- Features Section -->
+        <div class="row mt-5">
+            <div class="col-12">
+                <h3 class="text-center text-white mb-4">
+                    <i class="fas fa-star"></i> Scanner Features
+                </h3>
+            </div>
+            
+            <div class="col-md-3 text-center text-white mb-4">
+                <div class="feature-icon">
+                    <i class="fas fa-shield-virus"></i>
+                </div>
+                <h5>Fund Drain Detection</h5>
+                <p>Specifically targets vulnerabilities that allow stealing funds</p>
+            </div>
+            
+            <div class="col-md-3 text-center text-white mb-4">
+                <div class="feature-icon">
+                    <i class="fas fa-code"></i>
+                </div>
+                <h5>Multi-Source Analysis</h5>
+                <p>Supports verified Solidity, decompiled contracts, and raw bytecode</p>
+            </div>
+            
+            <div class="col-md-3 text-center text-white mb-4">
+                <div class="feature-icon">
+                    <i class="fas fa-brain"></i>
+                </div>
+                <h5>Advanced Patterns</h5>
+                <p>15+ specialized vulnerability patterns with ML-inspired confidence scoring</p>
+            </div>
+            
+            <div class="col-md-3 text-center text-white mb-4">
+                <div class="feature-icon">
+                    <i class="fas fa-award"></i>
+                </div>
+                <h5>Bug Bounty Ready</h5>
+                <p>Generates professional reports suitable for bounty submissions</p>
+            </div>
+        </div>
+    </div>
+</div>
+{% endblock %}
+
+{% block scripts %}
+<script>
+let currentScanId = null;
+let progressInterval = null;
+
+// Clear file input when text area is used
+function clearFileInput(fileInputId) {
+    document.getElementById(fileInputId).value = '';
+}
+
+// Clear text area when file is uploaded
+function clearTextArea(textAreaId) {
+    document.getElementById(textAreaId).value = '';
+}
+
+// Update source_type based on active tab
+document.querySelectorAll('a[data-bs-toggle="pill"]').forEach(tab => {
+    tab.addEventListener('shown.bs.tab', function(event) {
+        const target = event.target.getAttribute('href');
+        let sourceType;
+        
+        if (target === '#solidity-tab') {
+            sourceType = 'solidity';
+        } else if (target === '#decompiled-tab') {
+            sourceType = 'decompiled';
+        } else if (target === '#bytecode-tab') {
+            sourceType = 'bytecode';
+        }
+        
+        // Update hidden input
+        document.querySelector('input[name="source_type"]').value = sourceType;
+    });
+});
+
+// Handle form submission
+document.getElementById('scanForm').addEventListener('submit', function(e) {
+    e.preventDefault();
+    
+    // Show progress
+    document.getElementById('progressContainer').style.display = 'block';
+    document.getElementById('resultsContainer').style.display = 'none';
+    document.querySelector('.btn-scan').disabled = true;
+    
+    // Submit form data
+    const formData = new FormData(this);
+    
+    fetch('/scan', {
+        method: 'POST',
+        body: formData
+    })
+    .then(response => response.json())
+    .then(data => {
+        if (data.success) {
+            currentScanId = data.scan_id;
+
+            // Join WebSocket room for real-time output
+            joinScanRoom(currentScanId);
+
+            startProgressPolling();
+        } else {
+            showError(data.error || 'Failed to start scan');
+            hideProgress();
+        }
+    })
+    .catch(error => {
+        showError('Network error: ' + error.message);
+        hideProgress();
+    });
+});
+
+function startProgressPolling() {
+    progressInterval = setInterval(() => {
+        fetch(`/status/${currentScanId}`)
+        .then(response => response.json())
+        .then(data => {
+            updateProgress(data);
+            
+            if (data.status === 'completed') {
+                clearInterval(progressInterval);
+                showResults();
+            } else if (data.status === 'error') {
+                clearInterval(progressInterval);
+                showError(data.error || 'Scan failed');
+                hideProgress();
+            }
+        })
+        .catch(error => {
+            clearInterval(progressInterval);
+            showError('Failed to get scan status');
+            hideProgress();
+        });
+    }, 1000);
+}
+
+function updateProgress(status) {
+    const progressBar = document.getElementById('progressBar');
+    const progressText = document.getElementById('progressText');
+    
+    progressBar.style.width = status.progress + '%';
+    progressBar.textContent = status.progress + '%';
+    
+    // Update progress text based on status
+    const statusTexts = {
+        'starting': 'Initializing scan...',
+        'running': 'Analyzing contract code...',
+        'analyzing_solidity': 'Analyzing Solidity source code...',
+        'analyzing_decompiled': 'Analyzing decompiled code...',
+        'analyzing_bytecode': 'Analyzing bytecode...',
+        'completed': 'Scan completed!'
+    };
+    
+    progressText.textContent = statusTexts[status.status] || 'Processing...';
+}
+
+function showResults() {
+    document.getElementById('progressContainer').style.display = 'none';
+    document.getElementById('resultsContainer').style.display = 'block';
+    document.querySelector('.btn-scan').disabled = false;
+    
+    // Set up view report button
+    document.getElementById('viewReportBtn').onclick = function() {
+        window.open(`/report/${currentScanId}`, '_blank');
+    };
+}
+
+function hideProgress() {
+    document.getElementById('progressContainer').style.display = 'none';
+    document.querySelector('.btn-scan').disabled = false;
+}
+
+function showError(message) {
+    const alert = document.createElement('div');
+    alert.className = 'alert alert-danger alert-dismissible fade show';
+    alert.innerHTML = `
+        <strong>Error:</strong> ${message}
+        <button type="button" class="btn-close" data-bs-dismiss="alert"></button>
+    `;
+    
+    document.querySelector('.container').insertBefore(alert, document.querySelector('.row'));
+    
+    // Auto remove after 5 seconds
+    setTimeout(() => {
+        if (alert.parentNode) {
+            alert.parentNode.removeChild(alert);
+        }
+    }, 5000);
+}
+
+// ========== WEBSOCKET TERMINAL INTEGRATION ==========
+// WebSocket connection
+let socket = null;
+let terminalVisible = false;
+
+function initializeWebSocket() {
+    socket = io.connect(location.protocol + '//' + document.domain + ':' + location.port);
+
+    socket.on('connect', function() {
+        console.log('✅ WebSocket connected');
+        addTerminalLine('[SYSTEM] Connected to scanner', 'success');
+    });
+
+    socket.on('disconnect', function() {
+        console.log('❌ WebSocket disconnected');
+        addTerminalLine('[SYSTEM] Disconnected', 'error');
+    });
+
+    socket.on('scan_output', function(data) {
+        console.log('📨 Output:', data);
+        addTerminalLine(data.output, classifyOutputType(data.output));
+    });
+
+    socket.on('error', function(data) {
+        console.error('❌ Error:', data);
+        addTerminalLine(`[ERROR] ${data.message}`, 'error');
+    });
+}
+
+function joinScanRoom(scanId) {
+    if (socket && socket.connected) {
+        socket.emit('join_scan', {'scan_id': scanId});
+        console.log(`🔗 Joined scan: ${scanId}`);
+        addTerminalLine(`[SYSTEM] Monitoring scan ${scanId}`, 'info');
+
+        // Auto-show terminal
+        if (!terminalVisible) {
+            toggleTerminal();
+        }
+    } else {
+        console.error('Socket not connected');
+        setTimeout(() => joinScanRoom(scanId), 1000);
+    }
+}
+
+function addTerminalLine(text, type = 'info') {
+    const terminalContent = document.getElementById('terminal-content');
+    if (!terminalContent) return;
+
+    const timestamp = new Date().toLocaleTimeString();
+    const line = document.createElement('div');
+    line.className = `terminal-line terminal-${type}`;
+    line.innerHTML = `<span class="terminal-timestamp">[${timestamp}]</span> <span class="terminal-content">${escapeHtml(text)}</span>`;
+
+    terminalContent.appendChild(line);
+
+    const terminalOutput = document.getElementById('terminal-output');
+    if (terminalOutput) {
+        terminalOutput.scrollTop = terminalOutput.scrollHeight;
+    }
+}
+
+function classifyOutputType(text) {
+    const lower = text.toLowerCase();
+    if (lower.includes('error') || lower.includes('❌') || lower.includes('failed')) return 'error';
+    if (lower.includes('warning') || lower.includes('⚠️')) return 'warning';
+    if (lower.includes('success') || lower.includes('✅') || lower.includes('completed')) return 'success';
+    return 'info';
+}
+
+function toggleTerminal() {
+    const terminal = document.getElementById('terminal-output');
+    const toggleBtn = document.getElementById('terminalToggle');
+    if (!terminal || !toggleBtn) return;
+
+    terminalVisible = !terminalVisible;
+
+    if (terminalVisible) {
+        terminal.classList.add('active');
+        toggleBtn.classList.add('active');
+        toggleBtn.innerHTML = '<i class="fas fa-terminal"></i> Hide CLI Output';
+    } else {
+        terminal.classList.remove('active');
+        toggleBtn.classList.remove('active');
+        toggleBtn.innerHTML = '<i class="fas fa-terminal"></i> Show CLI Output';
+    }
+}
+
+function escapeHtml(text) {
+    const map = {'&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#039;'};
+    return text.replace(/[&<>"']/g, m => map[m]);
+}
+
+// Initialize on page load
+document.addEventListener('DOMContentLoaded', function() {
+    console.log('🚀 Initializing WebSocket...');
+    initializeWebSocket();
+});
+
+</script>
+{% endblock %}

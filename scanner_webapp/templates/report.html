@@ -1,0 +1,280 @@
+{% extends "base.html" %}
+
+{% block title %}Vulnerability Report - Deep Smart Contract Scanner{% endblock %}
+
+{% block content %}
+<div class="row">
+    <div class="col-12">
+        <!-- Report Header -->
+        <div class="card card-custom mb-4">
+            <div class="card-header bg-transparent">
+                <div class="row align-items-center">
+                    <div class="col-md-8">
+                        <h2 class="mb-1">
+                            <i class="fas fa-file-alt text-primary"></i> Vulnerability Report
+                        </h2>
+                        <p class="text-muted mb-0">Contract: {{ results.scan_info.contract_address }}</p>
+                        <small class="text-muted">Scan Date: {{ results.scan_info.scan_time }}</small>
+                    </div>
+                    <div class="col-md-4 text-end">
+                        <div class="btn-group" role="group">
+                            <a href="/download/{{ scan_id }}/markdown" class="btn btn-outline-primary">
+                                <i class="fas fa-download"></i> Markdown
+                            </a>
+                            <a href="/download/{{ scan_id }}/json" class="btn btn-outline-secondary">
+                                <i class="fas fa-download"></i> JSON
+                            </a>
+                        </div>
+                    </div>
+                </div>
+            </div>
+            
+            <div class="card-body">
+                <!-- Executive Summary -->
+                <div class="row text-center">
+                    <div class="col-md-2">
+                        <div class="border rounded p-3">
+                            <h3 class="mb-1">{{ results.total_vulnerabilities }}</h3>
+                            <small class="text-muted">Total Found</small>
+                        </div>
+                    </div>
+                    <div class="col-md-2">
+                        <div class="border rounded p-3">
+                            <h3 class="mb-1 severity-critical">{{ results.critical_count }}</h3>
+                            <small class="text-muted">🔴 Critical</small>
+                        </div>
+                    </div>
+                    <div class="col-md-2">
+                        <div class="border rounded p-3">
+                            <h3 class="mb-1 severity-high">{{ results.high_count }}</h3>
+                            <small class="text-muted">🟠 High</small>
+                        </div>
+                    </div>
+                    <div class="col-md-2">
+                        <div class="border rounded p-3">
+                            <h3 class="mb-1 severity-medium">{{ results.medium_count }}</h3>
+                            <small class="text-muted">🟡 Medium</small>
+                        </div>
+                    </div>
+                    <div class="col-md-2">
+                        <div class="border rounded p-3">
+                            <h3 class="mb-1 severity-low">{{ results.low_count }}</h3>
+                            <small class="text-muted">🔵 Low</small>
+                        </div>
+                    </div>
+                    <div class="col-md-2">
+                        <div class="border rounded p-3">
+                            <h3 class="mb-1">{{ results.scan_info.source_type|title }}</h3>
+                            <small class="text-muted">Source Type</small>
+                        </div>
+                    </div>
+                </div>
+                
+                {% if results.total_vulnerabilities == 0 %}
+                <div class="alert alert-success mt-4 text-center">
+                    <h4><i class="fas fa-shield-check"></i> No Vulnerabilities Found</h4>
+                    <p class="mb-0">No exploitable fund drain vulnerabilities were detected in this contract based on your scan criteria.</p>
+                </div>
+                {% endif %}
+            </div>
+        </div>
+
+        <!-- Vulnerability Details -->
+        {% if results.vulnerabilities %}
+        <div class="card card-custom">
+            <div class="card-header bg-transparent">
+                <h3 class="mb-0">
+                    <i class="fas fa-exclamation-triangle text-warning"></i> Detailed Findings
+                </h3>
+                <p class="text-muted mb-0">Critical vulnerabilities that external users can exploit</p>
+            </div>
+            
+            <div class="card-body">
+                {% for vuln in results.vulnerabilities %}
+                <div class="vulnerability-card card {{ vuln.severity.lower() }} mb-4">
+                    <div class="card-header">
+                        <div class="row align-items-center">
+                            <div class="col-md-8">
+                                <h5 class="mb-1">
+                                    {% if vuln.severity == 'CRITICAL' %}🔴
+                                    {% elif vuln.severity == 'HIGH' %}🟠
+                                    {% elif vuln.severity == 'MEDIUM' %}🟡
+                                    {% elif vuln.severity == 'LOW' %}🔵
+                                    {% else %}⚪{% endif %}
+                                    {{ loop.index }}. {{ vuln.title }}
+                                </h5>
+                                <small class="text-muted">{{ vuln.location }}</small>
+                            </div>
+                            <div class="col-md-4 text-end">
+                                <span class="badge bg-{{ 'danger' if vuln.severity == 'CRITICAL' else 
+                                                       ('warning' if vuln.severity == 'HIGH' else 
+                                                       ('info' if vuln.severity == 'MEDIUM' else 'secondary')) }}">
+                                    {{ vuln.severity }}
+                                </span>
+                                <span class="badge bg-light text-dark ms-2">
+                                    {{ ((vuln.confidence | float) * 100) | round | int }}% Confidence
+                                </span>
+                            </div>
+                        </div>
+                    </div>
+                    
+                    <div class="card-body">
+                        <div class="row">
+                            <div class="col-md-6">
+                                <h6><i class="fas fa-info-circle"></i> Description</h6>
+                                <p>{{ vuln.description }}</p>
+                                
+                                <h6><i class="fas fa-exclamation"></i> Impact</h6>
+                                <p>{{ vuln.impact }}</p>
+                            </div>
+                            <div class="col-md-6">
+                                <h6><i class="fas fa-route"></i> Exploit Path</h6>
+                                <pre class="bg-light p-2 rounded small">{{ vuln.exploit_path }}</pre>
+                                
+                                <h6><i class="fas fa-tools"></i> Recommendation</h6>
+                                <p>{{ vuln.recommendation }}</p>
+                            </div>
+                        </div>
+                        
+                        {% if vuln.proof_of_concept and vuln.proof_of_concept != 'Pattern matched' %}
+                        <div class="row mt-3">
+                            <div class="col-12">
+                                <h6><i class="fas fa-code"></i> Proof of Concept</h6>
+                                <div class="code-block">
+                                    <pre><code>{{ vuln.proof_of_concept }}</code></pre>
+                                </div>
+                            </div>
+                        </div>
+                        {% endif %}
+                    </div>
+                </div>
+                {% endfor %}
+            </div>
+        </div>
+        {% endif %}
+
+        <!-- Scan Information -->
+        <div class="card card-custom mt-4">
+            <div class="card-header bg-transparent">
+                <h4 class="mb-0">
+                    <i class="fas fa-info"></i> Scan Information
+                </h4>
+            </div>
+            <div class="card-body">
+                <div class="row">
+                    <div class="col-md-6">
+                        <table class="table table-sm">
+                            <tr>
+                                <td><strong>Contract Address:</strong></td>
+                                <td><code>{{ results.scan_info.contract_address }}</code></td>
+                            </tr>
+                            <tr>
+                                <td><strong>Source Type:</strong></td>
+                                <td>{{ results.scan_info.source_type|title }}</td>
+                            </tr>
+                            <tr>
+                                <td><strong>Scan Date:</strong></td>
+                                <td>{{ results.scan_info.scan_time }}</td>
+                            </tr>
+                        </table>
+                    </div>
+                    <div class="col-md-6">
+                        <table class="table table-sm">
+                            <tr>
+                                <td><strong>Scan Options:</strong></td>
+                                <td>
+                                    {% if results.scan_info.options_used and results.scan_info.options_used.non_privileged_only %}
+                                    <span class="badge bg-success">Non-Privileged Only</span>
+                                    {% endif %}
+                                    {% if results.scan_info.options_used and results.scan_info.options_used.min_severity %}
+                                    <span class="badge bg-info">Min: {{ results.scan_info.options_used.min_severity }}</span>
+                                    {% endif %}
+                                    {% if results.scan_info.options_used and results.scan_info.options_used.min_confidence %}
+                                    <span class="badge bg-secondary">{{ ((results.scan_info.options_used.min_confidence | float) * 100) | round | int }}% Confidence</span>
+                                    {% endif %}
+                                    {% if not results.scan_info.options_used or (not results.scan_info.options_used.non_privileged_only and not results.scan_info.options_used.min_severity and not results.scan_info.options_used.min_confidence) %}
+                                    <span class="badge bg-secondary">Default Settings</span>
+                                    {% endif %}
+                                </td>
+                            </tr>
+                            <tr>
+                                <td><strong>Scanner Version:</strong></td>
+                                <td>Deep Scanner v1.0</td>
+                            </tr>
+                            <tr>
+                                <td><strong>Focus:</strong></td>
+                                <td>Fund Drain Exploits</td>
+                            </tr>
+                        </table>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <!-- Bug Bounty Guidance -->
+        {% if results.critical_count > 0 or results.high_count > 0 %}
+        <div class="card card-custom mt-4 border-warning">
+            <div class="card-header bg-warning bg-opacity-10">
+                <h4 class="mb-0 text-warning">
+                    <i class="fas fa-trophy"></i> Bug Bounty Submission Guidance
+                </h4>
+            </div>
+            <div class="card-body">
+                <div class="alert alert-warning">
+                    <h5><i class="fas fa-exclamation-triangle"></i> Critical vulnerabilities found!</h5>
+                    <p class="mb-0">This contract contains potential fund drain vulnerabilities that may be suitable for bug bounty submission.</p>
+                </div>
+                
+                <h6>Next Steps:</h6>
+                <ol>
+                    <li><strong>Verify Findings:</strong> Double-check each vulnerability manually</li>
+                    <li><strong>Test Exploitability:</strong> Create proof-of-concept exploits</li>
+                    <li><strong>Check Scope:</strong> Ensure the contract is in-scope for the bug bounty program</li>
+                    <li><strong>Prepare Report:</strong> Use the downloaded markdown report as a starting point</li>
+                    <li><strong>Submit Responsibly:</strong> Follow the program's disclosure guidelines</li>
+                </ol>
+                
+                <div class="alert alert-info mt-3">
+                    <small>
+                        <strong>Remember:</strong> Always obtain proper authorization before testing contracts you don't own. 
+                        This scanner is for educational and ethical security research purposes only.
+                    </small>
+                </div>
+            </div>
+        </div>
+        {% endif %}
+
+        <!-- Navigation -->
+        <div class="text-center mt-4">
+            <a href="/" class="btn btn-primary">
+                <i class="fas fa-arrow-left"></i> Scan Another Contract
+            </a>
+            {% if results.total_vulnerabilities > 0 %}
+            <a href="/download/{{ scan_id }}/markdown" class="btn btn-success">
+                <i class="fas fa-download"></i> Download Full Report
+            </a>
+            {% endif %}
+        </div>
+    </div>
+</div>
+{% endblock %}
+
+{% block scripts %}
+<script>
+// Add syntax highlighting for code blocks
+document.addEventListener('DOMContentLoaded', function() {
+    // Simple syntax highlighting for Solidity
+    document.querySelectorAll('.code-block code').forEach(function(block) {
+        let html = block.innerHTML;
+        
+        // Highlight Solidity keywords
+        html = html.replace(/\b(function|contract|public|private|external|internal|pure|view|payable|modifier|require|revert|assert|mapping|address|uint256|bool|string)\b/g, '<span style="color: #ff6b6b; font-weight: bold;">$1</span>');
+        
+        // Highlight comments
+        html = html.replace(/(\/\/.*)/g, '<span style="color: #6c757d; font-style: italic;">$1</span>');
+        
+        block.innerHTML = html;
+    });
+});
+</script>
+{% endblock %}

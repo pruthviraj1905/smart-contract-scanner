@@ -1,0 +1,429 @@
+Below is a **clean, complete, taxonomy-style combined list** of **ALL known non-privileged fund-drain bug classes**, including both **contract-level logic bugs** and **storage-level / slot-level bugs**.
+This list is structured for research → blog writing → auditing checklists.
+
+No exploit instructions, only **concept + how it leads to non-privileged draining**.
+
+---
+
+# ✅ **FULL TAXONOMY OF ALL NON-PRIVILEGED FUND-DRAIN BUG CLASSES**
+
+**(Contract-Level + Storage-Level Combined)**
+
+---
+
+# 1. **Uninitialized Contract / Initialization Bugs**
+
+Non-privileged attacker becomes “owner” because contract is not initialized.
+
+### Why it drains:
+
+Once attacker initializes → they set themselves as admin → withdraw or upgrade to drain funds.
+
+**Examples:**
+
+* Public `initialize()` not called.
+* Implementation contract in proxy left uninitialized.
+* Missing `_disableInitializers()` in OZ upgradeable contracts.
+* Re-initialization allowed due to improper versioning.
+
+---
+
+# 2. **Uninitialized Storage / Critical Variables Defaulting to Zero**
+
+Contract relies on storage variables that MUST be set, but default = zero breaks logic.
+
+### Why it drains:
+
+Attacker abuses:
+
+* zero price
+* zero share ratio
+* zero owner
+* zero fees
+* zero oracle address
+  to drain vault/pool.
+
+**Examples:**
+
+* shareRatio=0 → withdraw gives infinite tokens
+* priceOracle=0 → price returns 0 → mint unlimited
+* owner=0 → access control bypass conditions
+
+---
+
+# 3. **Reentrancy (Effect-Interaction Violation)**
+
+Contract makes external call before updating state → attacker reenters withdrawal.
+
+### Variants:
+
+* Single-function reentrancy
+* Cross-function
+* Cross-contract
+* Read-only reentrancy (oracle update mid-call)
+
+### Why it drains:
+
+Attacker calls withdraw repeatedly before balance decrement.
+
+---
+
+# 4. **Arithmetic Overflow / Underflow / Division Errors**
+
+Unchecked math leads to incorrect balance or share calculations.
+
+### Why it drains:
+
+* Overflow gives attacker huge balances
+* Underflow turns small balance into 2^256 - 1
+* Division-by-zero returns unexpected values
+* Rounding errors consistently favor attacker
+
+---
+
+# 5. **Broken Access Control via Logic (Not Role-Based)**
+
+No privilege escalation required — logic conditions themselves are flawed.
+
+### Why it drains:
+
+Attacker satisfies weak conditions, e.g.:
+
+* `require(amount <= totalSupply)` (instead of checking user balance)
+* `tx.origin` authentication
+* user-supplied “beneficiary” address
+* compare with uninitialized boolean
+
+---
+
+# 6. **Delegatecall / Proxy Misuse or Arbitrary Delegation**
+
+Contract executes code of attacker-supplied contract via `delegatecall`.
+
+### Why it drains:
+
+Delegatecall runs in *caller’s storage*, so attacker can:
+
+* rewrite balances
+* rewrite owner
+* withdraw funds
+* selfdestruct
+* upgrade storage pointers
+
+All **without any privileges**.
+
+---
+
+# 7. **Unprotected Selfdestruct / Kill-Switch**
+
+Selfdestruct functionality callable by anyone or by satisfying wrong condition.
+
+### Why it drains:
+
+* Selfdestruct sends all ETH to attacker
+* Or wipes logic allowing secondary drain
+
+Often found in “emergency” functions.
+
+---
+
+# 8. **Incorrect Withdrawal / Redemption Accounting**
+
+Faulty math that incorrectly pays out more than intended.
+
+### Why it drains:
+
+Withdraw returns more than user share due to:
+
+* Wrong denominator
+* Stale or incorrect totalShares
+* Double-counting user’s deposit
+* Subtracting balance **after** transfer
+* Using outdated state before update (race condition)
+
+---
+
+# 9. **Price Oracle Manipulation (Economic But Enabled by Code)**
+
+Contract trusts manipulable data sources (single DEX pair, direct pool price).
+
+Not a permission issue.
+
+### Why it drains:
+
+Attacker:
+
+* manipulates price (flash loan),
+* borrows more than collateral,
+* drains pool/collateral.
+
+No privileged role needed.
+
+---
+
+# 10. **Flash-Loan Enabled Logic Breaks**
+
+Flash loans exploit assumptions that no one will have huge liquidity at once.
+
+### Why it drains:
+
+* rewards snapshot taken before update
+* collateral ratios temporarily bypassed
+* governance power temporarily boosted
+* pool balancing functions abused
+
+---
+
+# 11. **Front-running / MEV Exploitable Flows**
+
+Logic assumes fair ordering of transactions.
+
+### Why it drains:
+
+Attacker front-runs:
+
+* rebalance
+* migration
+* router-setting
+  turning operations in their favor to drain tokens.
+
+Example:
+Anyone-callable `rebalance()` swaps tokens at attacker-controlled rates.
+
+---
+
+# 12. **Insecure ERC20 Handling (Tokens That Misbehave)**
+
+### 12.1 Missing return value checks
+
+`transfer()` returns false → contract believes funds moved, accounting becomes unsynced → attacker withdraws unstaked assets.
+
+### 12.2 Approve race conditions
+
+Incorrect “reset to zero first” logic → attacker front-runs & drains allowances.
+
+### 12.3 Fee-on-transfer tokens
+
+Contract doesn’t account for fee deduction → attacker wins value differences repeatedly.
+
+---
+
+# 13. **Incorrect Reward / Fee Distribution Logic**
+
+Errors in reward index or accounting allow claiming too much.
+
+### Why it drains:
+
+Attacker:
+
+* stakes small amount,
+* triggers reward update incorrectly,
+* claims all historical rewards.
+
+Common in yield farms.
+
+---
+
+# 14. **Insecure Randomness (Game & Lottery Drains)**
+
+Poor RNG like:
+
+* `block.timestamp`
+* `blockhash`
+* predictable seeds
+
+### Why it drains:
+
+Attacker/miner predicts outcomes, repeatedly wins, drains prize pool.
+
+---
+
+# 15. **Arbitrary External Calls / User-Controlled Call Targets**
+
+If contract allows user-supplied:
+
+* call target
+* call data
+* token address
+
+→ attacker invokes internal sensitive functions indirectly.
+
+### Why it drains:
+
+Attacker performs:
+
+* arbitrary delegatecall
+* arbitrary transfer
+* arbitrary selfdestruct
+
+All accessible without privileges because logic trusts user input.
+
+---
+
+# 16. **Unprotected Token Rescue / Sweep Functions**
+
+“Owner-only” rescue functions often implemented incorrectly.
+
+### Why it drains:
+
+* missing modifier
+* wrong condition
+* default owner = zero
+  attacker drains tokens by calling `rescue()` or `recover()`.
+
+---
+
+# 17. **Cross-Chain Validation Bugs**
+
+Bridges or cross-chain protocols fail to validate proofs/messages properly.
+
+### Why it drains:
+
+Attacker submits:
+
+* replayed proof
+* forged message
+* mismatched chain ID
+  → receives unbacked tokens but redeems real assets.
+
+---
+
+# 18. **Incorrect Upgrade Logic / Missing Storage Gap**
+
+In upgradeable contracts:
+
+* storage collisions
+* overwritten variables
+* uninitialized gaps
+
+### Why it drains:
+
+Attacker manipulates storage via upgrade contracts → drains vault after incorrect variable alignment enables:
+
+* owner overwrite
+* share/index corruption
+* infinite minting
+
+---
+
+# 19. **Business Logic / Economic Exploits (Design Flaws)**
+
+Not bugs but drain-enabling design issues.
+
+### Why it drains:
+
+* borrow loops exploiting high LTV assets
+* AMM pools with bad curves
+* invariant misconfigurations
+* bonding curves with predictable arbitrage
+
+No permissions needed.
+
+---
+
+# 20. **State Desync (Balance Tracking Not Matching Real Token Transfers)**
+
+Internal accounting becomes detached from actual ERC20 balances.
+
+### Why it drains:
+
+Attacker uses this mismatch to withdraw more than their fair share.
+
+Common scenario:
+Contract does not check actual token balance changes after `transferFrom`.
+
+---
+
+# 21. **Signature / Permit Replay Bugs**
+
+Permit-style signatures incorrectly validated (nonce missing or incorrect domain separator).
+
+### Why it drains:
+
+Attacker replays signature to:
+
+* continuously spend from victim
+* unlock approvals
+* bypass authorization checks
+
+Without any privilege.
+
+---
+
+# 22. **Incorrect Fallback/Receive Logic**
+
+Fallback function unintentionally handles:
+
+* token transfers
+* initialization
+* fee updates
+* routing logic
+
+### Why it drains:
+
+Attacker sends ETH/tokens triggering fallback → fallback runs sensitive code.
+
+---
+
+# 23. **Misconfigured Default Values in Mapping/Struct**
+
+Common vulnerabilities:
+
+* whitelist default = true
+* blacklist default = false
+* reward multiplier default = huge
+* struct fields default to zero → logic break
+
+### Why it drains:
+
+Attacker qualifies for privileged flows (reward, withdraw, bonus) unintendedly.
+
+---
+
+# 24. **Lack of Checks-Effects-Interactions in Multi-step Operations**
+
+State updated incorrectly or too late.
+
+### Why it drains:
+
+Attacker interrupts multi-step flows via:
+
+* reentrancy
+* callbacks
+* price manipulation mid-flow
+  leading to incorrect redemption or overpayment.
+
+---
+
+# 25. **Incorrect Balance or Share Initialization**
+
+Pools often need correct initialization of:
+
+* totalShares
+* totalAssets
+* sharePrice
+* liquidity weights
+
+### Why it drains:
+
+Attacker:
+
+* deposits dust amount into zero-initialized pool
+* mints majority shares
+* withdraws all real assets from pool
+
+Classic “empty pool initialization” attack.
+
+---
+
+# ✔ **This is the master combined taxonomy**
+
+It merges:
+
+* **Contract-level logic bugs**
+* **Storage-level / slot-level initialization bugs**
+* **Economic drain bugs**
+
+All related to **non-privileged** fund draining.
+
+---
